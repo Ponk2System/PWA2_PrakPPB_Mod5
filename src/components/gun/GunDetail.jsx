@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import {
   ArrowLeft,
   Star,
@@ -83,14 +83,65 @@ export default function GunDetail({ gun, onBack, onEdit, onDelete, onArchive }) 
   // Optimistic reactions state for real-time immediate updates
   const [optimisticReactions, setOptimisticReactions] = useState({})
 
-  // Real-time polling effect to keep community reviews & reactions in sync
+  // Debounce timers: satu timer per reviewId untuk menunda POST ke server
+  const debounceTimers = useRef({})
+  // Snapshot reaksi sebelum optimistic update, untuk rollback jika server error
+  const prevReactions = useRef({})
+
+  // Cleanup semua timer saat komponen di-unmount
   useEffect(() => {
-    if (!gun?.id) return
-    const pollInterval = setInterval(() => {
-      refetchReviews()
-    }, 4000)
-    return () => clearInterval(pollInterval)
-  }, [gun?.id, refetchReviews])
+    return () => {
+      Object.values(debounceTimers.current).forEach(clearTimeout)
+    }
+  }, [])
+
+  /**
+   * handleToggleReaction — alur debounced optimistic update:
+   * 1. Update state lokal langsung (optimistic).
+   * 2. Simpan snapshot state sebelumnya untuk rollback.
+   * 3. Batalkan timer sebelumnya jika user klik lagi dalam 400ms.
+   * 4. Set timer 400ms, lalu kirim POST ke server.
+   * 5. Jika server error → rollback ke state sebelumnya.
+   */
+  const handleToggleReaction = useCallback((rev, type) => {
+    if (!rev?.id) return
+
+    const reviewId = rev.id
+
+    // State saat ini (optimistic override atau dari server)
+    const current =
+      optimisticReactions[reviewId] || getReviewReactionState(rev, currentUserId)
+
+    // Hitung state berikutnya
+    const next = calculateNextReaction(reviewId, currentUserId, type, current)
+
+    // Langkah 1 & 2: Simpan snapshot lama, lalu terapkan state baru seketika
+    prevReactions.current[reviewId] = current
+    setOptimisticReactions((prev) => ({ ...prev, [reviewId]: next }))
+
+    // Langkah 3: Batalkan timer debounce sebelumnya jika ada
+    if (debounceTimers.current[reviewId]) {
+      clearTimeout(debounceTimers.current[reviewId])
+    }
+
+    // Langkah 4: Jadwalkan POST ke server setelah 400ms
+    debounceTimers.current[reviewId] = setTimeout(async () => {
+      try {
+        await reviewService.toggleReaction(reviewId, currentUserId, type)
+        // Langkah 5a: Sukses — sinkronkan data terbaru dari server
+        refetchReviews()
+      } catch (err) {
+        console.warn('Could not sync reaction to server, rolling back:', err)
+        // Langkah 5b: Error — rollback ke state sebelumnya
+        const snapshot = prevReactions.current[reviewId]
+        if (snapshot) {
+          setOptimisticReactions((prev) => ({ ...prev, [reviewId]: snapshot }))
+        }
+      } finally {
+        delete debounceTimers.current[reviewId]
+      }
+    }, 400)
+  }, [optimisticReactions, currentUserId, refetchReviews])
 
   const avgRating = gun.average_rating || averageRating(reviews)
   const reviewCount = gun.review_count ?? reviews.length
@@ -195,26 +246,6 @@ export default function GunDetail({ gun, onBack, onEdit, onDelete, onArchive }) 
     }
   }
 
-  const handleToggleReaction = async (rev, type) => {
-    if (!rev?.id) return
-    const current =
-      optimisticReactions[rev.id] || getReviewReactionState(rev, currentUserId)
-    const next = calculateNextReaction(rev.id, currentUserId, type, current)
-
-    // 1. Instant optimistic state update for 0ms visual feedback
-    setOptimisticReactions((prev) => ({
-      ...prev,
-      [rev.id]: next,
-    }))
-
-    // 2. Persist reaction to Supabase backend in background
-    try {
-      await reviewService.toggleReaction(rev.id, currentUserId, type)
-      refetchReviews()
-    } catch (err) {
-      console.warn('Could not sync reaction to server:', err)
-    }
-  }
 
   return (
     <div className="detail">
