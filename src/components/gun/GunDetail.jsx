@@ -26,9 +26,10 @@ import {
 import { getUserIdentifier } from '../../services/userService'
 import { formatPrice, averageRating } from '../../utils/helpers'
 import {
-  getReviewReactions,
-  toggleReaction,
+  getReviewReactionState,
+  calculateNextReaction,
 } from '../../utils/reviewReactions'
+import reviewService from '../../services/reviewService'
 
 /**
  * Full-screen product detail view with multi-image gallery,
@@ -79,8 +80,17 @@ export default function GunDetail({ gun, onBack, onEdit, onDelete, onArchive }) 
   const [editComment, setEditComment] = useState('')
   const [editError, setEditError] = useState('')
 
-  // Reactions revision trigger for live UI update
-  const [reactionRevision, setReactionRevision] = useState(0)
+  // Optimistic reactions state for real-time immediate updates
+  const [optimisticReactions, setOptimisticReactions] = useState({})
+
+  // Real-time polling effect to keep community reviews & reactions in sync
+  useEffect(() => {
+    if (!gun?.id) return
+    const pollInterval = setInterval(() => {
+      refetchReviews()
+    }, 4000)
+    return () => clearInterval(pollInterval)
+  }, [gun?.id, refetchReviews])
 
   const avgRating = gun.average_rating || averageRating(reviews)
   const reviewCount = gun.review_count ?? reviews.length
@@ -161,9 +171,11 @@ export default function GunDetail({ gun, onBack, onEdit, onDelete, onArchive }) 
 
   const handleSaveEditReview = async (reviewId) => {
     setEditError('')
+    const targetRev = reviews.find((r) => r.id === reviewId)
     const updated = await updateReview(reviewId, {
       rating: editRating,
       comment: editComment.trim(),
+      raw_comment: targetRev?.raw_comment,
     })
     if (updated) {
       setEditingReviewId(null)
@@ -183,9 +195,25 @@ export default function GunDetail({ gun, onBack, onEdit, onDelete, onArchive }) 
     }
   }
 
-  const handleToggleReaction = (reviewId, type) => {
-    toggleReaction(reviewId, type)
-    setReactionRevision((r) => r + 1)
+  const handleToggleReaction = async (rev, type) => {
+    if (!rev?.id) return
+    const current =
+      optimisticReactions[rev.id] || getReviewReactionState(rev, currentUserId)
+    const next = calculateNextReaction(rev.id, currentUserId, type, current)
+
+    // 1. Instant optimistic state update for 0ms visual feedback
+    setOptimisticReactions((prev) => ({
+      ...prev,
+      [rev.id]: next,
+    }))
+
+    // 2. Persist reaction to Supabase backend in background
+    try {
+      await reviewService.toggleReaction(rev.id, currentUserId, type)
+      refetchReviews()
+    } catch (err) {
+      console.warn('Could not sync reaction to server:', err)
+    }
   }
 
   return (
@@ -414,9 +442,8 @@ export default function GunDetail({ gun, onBack, onEdit, onDelete, onArchive }) 
               const isEditingThis = editingReviewId === rev.id
 
               // Reaction data for other reviews
-              // reactionRevision triggers re-read of reactions
-              void reactionRevision
-              const reactionData = getReviewReactions(rev.id)
+              const reactionData =
+                optimisticReactions[rev.id] || getReviewReactionState(rev, currentUserId)
 
               return (
                 <li key={rev.id} className={`review-item ${isOwnReview ? 'review-item--own' : ''}`}>
@@ -522,7 +549,7 @@ export default function GunDetail({ gun, onBack, onEdit, onDelete, onArchive }) 
                               className={`review-vote-btn ${
                                 reactionData.userReaction === 'like' ? 'review-vote-btn--active-like' : ''
                               }`}
-                              onClick={() => handleToggleReaction(rev.id, 'like')}
+                              onClick={() => handleToggleReaction(rev, 'like')}
                               title="Helpful review (Thumbs Up)"
                             >
                               <ThumbsUp size={13} />
@@ -534,7 +561,7 @@ export default function GunDetail({ gun, onBack, onEdit, onDelete, onArchive }) 
                               className={`review-vote-btn ${
                                 reactionData.userReaction === 'dislike' ? 'review-vote-btn--active-dislike' : ''
                               }`}
-                              onClick={() => handleToggleReaction(rev.id, 'dislike')}
+                              onClick={() => handleToggleReaction(rev, 'dislike')}
                               title="Unhelpful review (Thumbs Down)"
                             >
                               <ThumbsDown size={13} />
