@@ -5,6 +5,7 @@ import { BASE_URL, SUPABASE_KEY, IS_SUPABASE } from '../config/api'
 // UploadService — image upload service.
 // Supports Supabase Storage (/storage/v1/object/:bucket/:file) and
 // standard REST API (/api/v1/upload), with client-side fallback.
+// Also supports multi-image uploads concurrently.
 // ---------------------------------------------------------------------------
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
@@ -78,6 +79,22 @@ class UploadService {
     })
 
     return response.data
+  }
+
+  /**
+   * Upload multiple image files concurrently.
+   * @param {FileList|File[]} files
+   * @returns {Promise<{ success: boolean, urls: string[] }>}
+   */
+  async uploadMultipleImages(files) {
+    if (!files || files.length === 0) {
+      return { success: true, urls: [] }
+    }
+    const fileArray = Array.from(files)
+    const uploadPromises = fileArray.map((file) => this.uploadImage(file))
+    const results = await Promise.all(uploadPromises)
+    const urls = results.map((res) => res?.data?.url).filter(Boolean)
+    return { success: true, urls }
   }
 }
 

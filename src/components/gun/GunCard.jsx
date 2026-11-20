@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Share2, Check } from 'lucide-react'
+import { Share2, Check, Archive, Camera } from 'lucide-react'
 import FavoriteButton from '../common/FavoriteButton'
 import { formatPrice, truncate } from '../../utils/helpers'
 
@@ -11,13 +11,15 @@ import { formatPrice, truncate } from '../../utils/helpers'
  * @param {Function} props.onSelect  — called with the gun when clicked
  * @param {Function} [props.onEdit]  — called when Edit is clicked (admin)
  * @param {Function} [props.onDelete]— called when Delete is clicked (admin)
+ * @param {Function} [props.onArchive]— called when Archive is clicked
  */
-export default function GunCard({ gun, onSelect, onEdit, onDelete }) {
+export default function GunCard({ gun, onSelect, onEdit, onDelete, onArchive }) {
   const [copied, setCopied] = useState(false)
   const imgSrc = gun.image_url || gun.image || '/guns/pistol.svg'
   const category = gun.type || gun.category || '—'
   const caliber = gun.caliber || gun.difficulty || ''
   const price = gun.price ?? gun.cook_time ?? 0
+  const imageCount = Array.isArray(gun.images) ? gun.images.length : 1
 
   const handleShare = async (e) => {
     e.stopPropagation()
@@ -61,14 +63,24 @@ export default function GunCard({ gun, onSelect, onEdit, onDelete }) {
         onClick={() => onSelect(gun)}
         aria-label={`View ${gun.name}`}
       >
-        <img
-          className="card-img"
-          src={imgSrc}
-          alt={gun.name}
-          width="240"
-          height="180"
-          loading="lazy"
-        />
+        <div className="card-img-container" style={{ position: 'relative' }}>
+          <img
+            className="card-img"
+            src={imgSrc}
+            alt={gun.name}
+            width="240"
+            height="180"
+            loading="lazy"
+          />
+          {imageCount > 1 && (
+            <span
+              className="card-img-badge"
+              title={`${imageCount} images available`}
+            >
+              <Camera size={12} /> {imageCount}
+            </span>
+          )}
+        </div>
 
         <span className="name display">{gun.name}</span>
 
@@ -98,11 +110,29 @@ export default function GunCard({ gun, onSelect, onEdit, onDelete }) {
           {copied ? <Check size={16} /> : <Share2 size={16} />}
         </button>
 
+        {onArchive && (
+          <button
+            type="button"
+            className="card-act-btn"
+            onClick={(e) => {
+              e.stopPropagation()
+              onArchive(gun)
+            }}
+            aria-label={`Archive ${gun.name}`}
+            title="Arsipkan katalog ini"
+          >
+            <Archive size={16} />
+          </button>
+        )}
+
         {onEdit && (
           <button
             type="button"
             className="card-act-btn"
-            onClick={(e) => { e.stopPropagation(); onEdit(gun) }}
+            onClick={(e) => {
+              e.stopPropagation()
+              onEdit(gun)
+            }}
             aria-label={`Edit ${gun.name}`}
             title="Edit"
           >
@@ -114,7 +144,10 @@ export default function GunCard({ gun, onSelect, onEdit, onDelete }) {
           <button
             type="button"
             className="card-act-btn card-act-btn--danger"
-            onClick={(e) => { e.stopPropagation(); onDelete(gun) }}
+            onClick={(e) => {
+              e.stopPropagation()
+              onDelete(gun)
+            }}
             aria-label={`Delete ${gun.name}`}
             title="Delete"
           >

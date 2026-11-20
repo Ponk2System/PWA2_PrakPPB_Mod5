@@ -1631,3 +1631,525 @@
   color: #ffffff !important;
   border-color: #10b981 !important;
 }
+
+
+/* ---------------------------------------------------------------------------
+ * Multiple Image Gallery & Management Styles
+ * --------------------------------------------------------------------------- */
+.card-img-badge {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.75);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 3px 7px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  backdrop-filter: blur(2px);
+  z-index: 2;
+}
+
+.detail-gallery {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 480px;
+}
+
+.detail-img-wrap {
+  width: 100%;
+  background: var(--paper, #f7fafc);
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 6px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 280px;
+}
+
+.gallery-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  border: none;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  z-index: 3;
+}
+
+.gallery-arrow:hover {
+  background: var(--brass, #d4a373);
+  color: #fff;
+}
+
+.gallery-arrow--prev {
+  left: 10px;
+}
+
+.gallery-arrow--next {
+  right: 10px;
+}
+
+.gallery-counter {
+  position: absolute;
+  bottom: 10px;
+  right: 12px;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 12px;
+  backdrop-filter: blur(2px);
+}
+
+.gallery-thumbnails {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.gallery-thumb-btn {
+  width: 64px;
+  height: 52px;
+  border-radius: 4px;
+  border: 2px solid transparent;
+  overflow: hidden;
+  background: var(--paper);
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 0;
+  transition: border-color 0.2s ease;
+}
+
+.gallery-thumb-btn img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.gallery-thumb-btn.active {
+  border-color: var(--brass, #d4a373);
+}
+
+.multi-image-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 12px;
+}
+
+.multi-image-card {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--paper);
+}
+
+.multi-image-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.multi-image-card.is-primary {
+  border: 2px solid var(--brass, #d4a373);
+}
+
+.multi-image-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 6px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.multi-image-card:hover .multi-image-overlay,
+.multi-image-card.is-primary .multi-image-overlay {
+  opacity: 1;
+}
+
+.primary-pill {
+  background: var(--brass, #d4a373);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  align-self: flex-start;
+  text-transform: uppercase;
+}
+
+.btn-overlay-action {
+  background: rgba(255, 255, 255, 0.9);
+  color: #1a202c;
+  border: none;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 3px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.btn-overlay-action:hover {
+  background: var(--brass);
+  color: #fff;
+}
+
+.btn-overlay-delete {
+  background: rgba(239, 68, 68, 0.85);
+  color: #fff;
+  border: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  align-self: flex-end;
+}
+
+.btn-overlay-delete:hover {
+  background: #dc2626;
+}
+
+/* ---------------------------------------------------------------------------
+ * Profile Edit Modal Styles
+ * --------------------------------------------------------------------------- */
+.modal-profile {
+  max-width: 480px;
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 24px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.2);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 12px;
+}
+
+.modal-close-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+}
+
+.modal-close-btn:hover {
+  color: var(--ink);
+  background: var(--paper);
+}
+
+.modal-avatar-picker {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.modal-avatar-preview {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  background: var(--paper);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.modal-avatar-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ---------------------------------------------------------------------------
+ * Saved Drafts Section Styles
+ * --------------------------------------------------------------------------- */
+.draft-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.draft-card {
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 16px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.draft-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+.draft-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--brass);
+  background: rgba(212, 163, 115, 0.12);
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-bottom: 6px;
+}
+
+.draft-title {
+  margin: 0 0 4px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.draft-subtitle {
+  margin: 0 0 8px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.draft-time {
+  font-size: 0.78rem;
+  color: var(--steel);
+}
+
+.draft-card-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* ---------------------------------------------------------------------------
+ * Archived Hardware Section Styles
+ * --------------------------------------------------------------------------- */
+.archive-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.archive-card {
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: box-shadow 0.2s ease;
+}
+
+.archive-card-img {
+  width: 100%;
+  height: 140px;
+  object-fit: contain;
+  background: var(--paper);
+  padding: 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.archive-card-body {
+  padding: 14px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.archive-card-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.archive-card-meta {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.archive-card-price {
+  margin: 6px 0 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--brass);
+}
+
+.archive-card-date {
+  font-size: 0.75rem;
+  color: var(--steel);
+  margin-top: 4px;
+}
+
+.archive-card-actions {
+  display: flex;
+  gap: 8px;
+  padding: 12px 14px;
+  border-top: 1px solid var(--line);
+  background: var(--paper);
+}
+
+/* ---------------------------------------------------------------------------
+ * About Armory & Contact Section Styles
+ * --------------------------------------------------------------------------- */
+.armory-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 18px;
+}
+
+.student-badge-card {
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 16px 20px;
+}
+
+/* ---------------------------------------------------------------------------
+ * Review Enhancements (Own edit/delete, Like/Dislike votes)
+ * --------------------------------------------------------------------------- */
+.review-item--own {
+  border-left: 3px solid var(--brass, #d4a373);
+  background: rgba(212, 163, 115, 0.04);
+}
+
+.review-badge-own {
+  font-size: 0.7rem;
+  font-weight: 700;
+  background: var(--brass);
+  color: #fff;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.review-edit-box {
+  margin-top: 10px;
+  padding: 12px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.review-footer-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--line);
+}
+
+.review-owner-tools {
+  display: flex;
+  gap: 8px;
+}
+
+.review-act-btn {
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-size: 0.78rem;
+  padding: 4px 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  color: var(--steel);
+  transition: all 0.2s ease;
+}
+
+.review-act-btn:hover {
+  border-color: var(--brass);
+  color: var(--brass);
+}
+
+.review-act-btn--danger:hover {
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+.review-reaction-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.review-vote-btn {
+  background: var(--paper, #f7fafc);
+  border: 1px solid var(--line, #cbd5e0);
+  border-radius: 20px;
+  padding: 4px 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  color: var(--steel, #4a5568);
+  transition: all 0.2s ease;
+}
+
+.review-vote-btn:hover {
+  border-color: var(--brass, #d4a373);
+  color: var(--brass, #d4a373);
+}
+
+.review-vote-btn--active-like {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: #10b981;
+  color: #059669;
+}
+
+.review-vote-btn--active-dislike {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: #ef4444;
+  color: #dc2626;
+}

@@ -18,8 +18,6 @@ const ProfilePage = lazy(() => import('./pages/ProfilePage.jsx'))
 const CreateGunPage = lazy(() => import('./pages/CreateGunPage.jsx'))
 const EditGunPage = lazy(() => import('./pages/EditGunPage.jsx'))
 const GunDetail = lazy(() => import('./components/gun/GunDetail.jsx'))
-const About = lazy(() => import('./pages/About.jsx'))
-const Contact = lazy(() => import('./pages/Contact.jsx'))
 
 function App() {
   const [showSplash, setShowSplash] = useState(true)
@@ -167,10 +165,11 @@ function App() {
                 />
               )}
               {tab === 'Profile' && (
-                <ProfilePage onReplaySplash={() => setShowSplash(true)} />
+                <ProfilePage
+                  onReplaySplash={() => setShowSplash(true)}
+                  onNavigate={(destination, payload) => handleNavigate(destination, payload)}
+                />
               )}
-              {tab === 'About' && <About />}
-              {tab === 'Contact' && <Contact />}
             </>
           )}
         </Suspense>

@@ -1,5 +1,14 @@
-import { useState, useMemo, useEffect } from 'react'
-import { RefreshCw, Plus, Loader, AlertCircle, PackageOpen, ChevronLeft, ChevronRight } from 'lucide-react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
+import {
+  RefreshCw,
+  Plus,
+  Loader,
+  AlertCircle,
+  PackageOpen,
+  ChevronLeft,
+  ChevronRight,
+  Check,
+} from 'lucide-react'
 import { useGuns } from '../hooks/useGuns'
 import GUNS_LOCAL from '../data/guns'
 import GunCard from '../components/gun/GunCard'
@@ -7,6 +16,11 @@ import GunDetail from '../components/gun/GunDetail'
 import AdvancedFilter from '../components/common/AdvancedFilter'
 import ConfirmModal from '../components/modals/ConfirmModal'
 import gunService from '../services/gunService'
+import {
+  isGunArchived,
+  archiveGun,
+  ARCHIVE_EVENT,
+} from '../utils/archiveStorage'
 import {
   matchesSearch,
   matchesCategory,
@@ -21,17 +35,28 @@ import {
  *   1. Live API via useGuns()
  *   2. Local static array (GUNS_LOCAL) when the API is unreachable
  *
- * Features: search, category filter, sort, CRUD actions, pagination, detail modal.
+ * Features: search, category filter, sort, CRUD actions, pagination,
+ * detail view, and archiving.
  */
 export default function Catalog({ onNavigate }) {
   // ---- API data ----
   const { guns: apiGuns, loading, error, refetch } = useGuns({ limit: 50 })
   const [useLocal, setUseLocal] = useState(false)
+  const [archiveRevision, setArchiveRevision] = useState(0)
+  const [archiveNotice, setArchiveNotice] = useState('')
+
+  // Listen for archive/restore events
+  useEffect(() => {
+    const handleArchiveUpdate = () => {
+      setArchiveRevision((r) => r + 1)
+    }
+    window.addEventListener(ARCHIVE_EVENT, handleArchiveUpdate)
+    return () => window.removeEventListener(ARCHIVE_EVENT, handleArchiveUpdate)
+  }, [])
 
   // Decide data source
   const rawGuns = useMemo(() => {
     if (useLocal || (error && apiGuns.length === 0)) {
-      // Enrich local data with synthetic ids so FavoriteButton and detail work
       return GUNS_LOCAL.map((g, i) => ({ ...g, id: g.id || `local-${i}` }))
     }
     return apiGuns
@@ -54,12 +79,15 @@ export default function Catalog({ onNavigate }) {
 
   const categories = useMemo(() => extractCategories(rawGuns), [rawGuns])
 
+  // Filter out archived products
   const filteredGuns = useMemo(() => {
+    // archiveRevision ensures recomputation when archive changes
+    void archiveRevision
     let result = rawGuns.filter(
-      (g) => matchesSearch(g, search) && matchesCategory(g, activeCategory),
+      (g) => !isGunArchived(g.id) && matchesSearch(g, search) && matchesCategory(g, activeCategory),
     )
     return sortItems(result, sortKey, sortOrder)
-  }, [rawGuns, search, activeCategory, sortKey, sortOrder])
+  }, [rawGuns, search, activeCategory, sortKey, sortOrder, archiveRevision])
 
   const totalPages = Math.max(1, Math.ceil(filteredGuns.length / pageSize))
 
@@ -91,6 +119,17 @@ export default function Catalog({ onNavigate }) {
     }
   }
 
+  // ---- archive handler ----
+  const handleArchive = useCallback((gun) => {
+    if (!gun) return
+    archiveGun(gun)
+    setArchiveNotice(`"${gun.name}" berhasil diarsipkan. Lihat di tab Profile.`)
+    setTimeout(() => setArchiveNotice(''), 4000)
+    if (selectedGun?.id === gun.id) {
+      setSelectedGun(null)
+    }
+  }, [selectedGun])
+
   // ---- If viewing a single product detail ----
   if (selectedGun) {
     return (
@@ -98,7 +137,11 @@ export default function Catalog({ onNavigate }) {
         gun={selectedGun}
         onBack={() => setSelectedGun(null)}
         onEdit={(g) => onNavigate && onNavigate('Edit', g)}
-        onDelete={(g) => { setSelectedGun(null); setDeleteTarget(g) }}
+        onDelete={(g) => {
+          setSelectedGun(null)
+          setDeleteTarget(g)
+        }}
+        onArchive={handleArchive}
       />
     )
   }
@@ -113,6 +156,12 @@ export default function Catalog({ onNavigate }) {
           with its type, caliber, and price — nothing else.
         </p>
       </section>
+
+      {archiveNotice && (
+        <div className="toast toast--success">
+          <Check size={18} /> {archiveNotice}
+        </div>
+      )}
 
       <section>
         <div className="list-head">
@@ -142,7 +191,10 @@ export default function Catalog({ onNavigate }) {
           onCategory={setActiveCategory}
           sortKey={sortKey}
           sortOrder={sortOrder}
-          onSort={({ key, order }) => { setSortKey(key); setSortOrder(order) }}
+          onSort={({ key, order }) => {
+            setSortKey(key)
+            setSortOrder(order)
+          }}
         />
 
         {/* States */}
@@ -175,7 +227,7 @@ export default function Catalog({ onNavigate }) {
         {!loading && filteredGuns.length === 0 && !error && (
           <div className="state-box">
             <PackageOpen size={28} />
-            <p>No products match your search.</p>
+            <p>No products match your search or all matching items are archived.</p>
           </div>
         )}
 
@@ -190,6 +242,7 @@ export default function Catalog({ onNavigate }) {
                   onSelect={setSelectedGun}
                   onEdit={onNavigate ? (g) => onNavigate('Edit', g) : undefined}
                   onDelete={setDeleteTarget}
+                  onArchive={handleArchive}
                 />
               ))}
             </ul>
@@ -215,7 +268,9 @@ export default function Catalog({ onNavigate }) {
                     <button
                       key={pageNum}
                       type="button"
-                      className={`pagination-num ${pageNum === currentPage ? 'pagination-num--active' : ''}`}
+                      className={`pagination-num ${
+                        pageNum === currentPage ? 'pagination-num--active' : ''
+                      }`}
                       onClick={() => {
                         setCurrentPage(pageNum)
                         window.scrollTo({ top: 350, behavior: 'smooth' })
@@ -241,7 +296,9 @@ export default function Catalog({ onNavigate }) {
                 </button>
 
                 <span className="pagination-info">
-                  Showing {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, filteredGuns.length)} of {filteredGuns.length}
+                  Showing {(currentPage - 1) * pageSize + 1}–
+                  {Math.min(currentPage * pageSize, filteredGuns.length)} of{' '}
+                  {filteredGuns.length}
                 </span>
               </div>
             )}
@@ -254,7 +311,10 @@ export default function Catalog({ onNavigate }) {
             <button
               type="button"
               className="link-btn"
-              onClick={() => { setUseLocal(false); refetch() }}
+              onClick={() => {
+                setUseLocal(false)
+                refetch()
+              }}
             >
               Retry server
             </button>
@@ -271,11 +331,12 @@ export default function Catalog({ onNavigate }) {
         danger
         loading={deleting}
         onConfirm={handleDelete}
-        onCancel={() => { setDeleteTarget(null); setDeleteError('') }}
+        onCancel={() => {
+          setDeleteTarget(null)
+          setDeleteError('')
+        }}
       />
-      {deleteError && (
-        <div className="toast toast--error">{deleteError}</div>
-      )}
+      {deleteError && <div className="toast toast--error">{deleteError}</div>}
     </>
   )
 }

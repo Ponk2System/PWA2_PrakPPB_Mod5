@@ -76,3 +76,72 @@ export function useCreateReview() {
   return { createReview, loading, error, success }
 }
 
+// ---------------------------------------------------------------------------
+// useUpdateReview — edit an existing review for a product.
+// ---------------------------------------------------------------------------
+
+export function useUpdateReview() {
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const [success, setSuccess] = useState(false)
+
+  const updateReview = async (reviewId, reviewData) => {
+    try {
+      setLoading(true)
+      setError(null)
+      setSuccess(false)
+
+      const response = await reviewService.updateReview(reviewId, reviewData)
+
+      if (response.success) {
+        setSuccess(true)
+        return response.data
+      } else {
+        setError(response.message || 'Failed to update review.')
+        return null
+      }
+    } catch (err) {
+      setError(err.message || 'An error occurred while updating review.')
+      return null
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return { updateReview, loading, error, success }
+}
+
+// ---------------------------------------------------------------------------
+// useDeleteReview — delete a review for a product.
+// ---------------------------------------------------------------------------
+
+export function useDeleteReview() {
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const [success, setSuccess] = useState(false)
+
+  const deleteReview = async (reviewId) => {
+    try {
+      setLoading(true)
+      setError(null)
+      setSuccess(false)
+
+      const response = await reviewService.deleteReview(reviewId)
+
+      if (response.success) {
+        setSuccess(true)
+        return true
+      } else {
+        setError(response.message || 'Failed to delete review.')
+        return false
+      }
+    } catch (err) {
+      setError(err.message || 'An error occurred while deleting review.')
+      return false
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return { deleteReview, loading, error, success }
+}

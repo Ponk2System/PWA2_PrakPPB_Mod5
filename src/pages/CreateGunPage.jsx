@@ -6,8 +6,9 @@ import {
   Plus,
   Loader,
   Save,
-  CheckCircle,
   AlertCircle,
+  Image as ImageIcon,
+  Check,
 } from 'lucide-react'
 import gunService from '../services/gunService'
 import uploadService from '../services/uploadService'
@@ -22,11 +23,11 @@ import {
 import ConfirmModal from '../components/modals/ConfirmModal'
 
 /**
- * CreateGunPage — Create a new weapon / hardware item with image upload,
+ * CreateGunPage — Create a new weapon / hardware item with multi-image support,
  * draft persistence (auto-save), specs, and assembly steps.
  */
 export default function CreateGunPage({ onBack, onSuccess }) {
-  // Step state: 'upload' (upload or choose image) or 'form' (enter details)
+  // Step state: 'upload' (upload or choose images) or 'form' (enter details)
   const [currentStep, setCurrentStep] = useState('upload')
 
   const [formData, setFormData] = useState({
@@ -41,9 +42,9 @@ export default function CreateGunPage({ onBack, onSuccess }) {
     is_featured: false,
   })
 
-  const [imageFile, setImageFile] = useState(null)
-  const [imagePreview, setImagePreview] = useState(null)
-  const [uploadedImageUrl, setUploadedImageUrl] = useState('')
+  // Multi-image list & primary image index
+  const [images, setImages] = useState([])
+  const [customUrlInput, setCustomUrlInput] = useState('')
 
   // Specifications (ingredients in API)
   const [specs, setSpecs] = useState([
@@ -72,7 +73,7 @@ export default function CreateGunPage({ onBack, onSuccess }) {
       formData,
       specs,
       steps,
-      uploadedImageUrl,
+      images,
     }
     const saved = saveDraft(draftData, 'create')
     if (saved) {
@@ -83,7 +84,7 @@ export default function CreateGunPage({ onBack, onSuccess }) {
         setTimeout(() => setSuccessMsg(''), 3000)
       }
     }
-  }, [formData, specs, steps, uploadedImageUrl])
+  }, [formData, specs, steps, images])
 
   // Auto-save draft every 30 seconds while in form step
   useEffect(() => {
@@ -102,9 +103,11 @@ export default function CreateGunPage({ onBack, onSuccess }) {
       if (draft.formData) setFormData(draft.formData)
       if (draft.specs) setSpecs(draft.specs)
       if (draft.steps) setSteps(draft.steps)
-      if (draft.uploadedImageUrl) {
-        setUploadedImageUrl(draft.uploadedImageUrl)
-        setImagePreview(draft.uploadedImageUrl)
+      if (Array.isArray(draft.images) && draft.images.length > 0) {
+        setImages(draft.images)
+        setCurrentStep('form')
+      } else if (draft.uploadedImageUrl) {
+        setImages([draft.uploadedImageUrl])
         setCurrentStep('form')
       }
       setShowDraftModal(false)
@@ -119,66 +122,73 @@ export default function CreateGunPage({ onBack, onSuccess }) {
     setDraftTimestamp(null)
   }
 
-  // Handle file selection
-  const handleImageChange = (e) => {
-    const file = e.target.files[0]
-    if (!file) return
-
-    if (file.size > 5 * 1024 * 1024) {
-      setError('File size exceeds 5MB limit.')
-      return
-    }
+  // Handle multi-file selection
+  const handleImagesUpload = async (e) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
 
     const allowed = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
-    if (!allowed.includes(file.type)) {
-      setError('Allowed formats: .jpg, .jpeg, .png, .webp')
-      return
-    }
+    const validFiles = []
 
-    setImageFile(file)
-    setImagePreview(URL.createObjectURL(file))
-    setError('')
-  }
-
-  // Quick fallback select vector from local assets
-  const handleSelectPreset = (url) => {
-    setImageFile(null)
-    setImagePreview(url)
-    setUploadedImageUrl(url)
-    setCurrentStep('form')
-    setError('')
-  }
-
-  // Upload image to server
-  const handleUploadImage = async () => {
-    if (!imageFile) {
-      // If user already previewed a preset or entered a url, advance to form
-      if (uploadedImageUrl) {
-        setCurrentStep('form')
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]
+      if (file.size > 5 * 1024 * 1024) {
+        setError(`File ${file.name} exceeds 5MB limit.`)
         return
       }
-      setError('Please select an image file first.')
-      return
+      if (!allowed.includes(file.type)) {
+        setError(`File ${file.name} is not a supported format (JPG, PNG, WebP).`)
+        return
+      }
+      validFiles.push(file)
     }
 
     try {
       setUploading(true)
       setError('')
-      const result = await uploadService.uploadImage(imageFile)
-      if (result.success && result.data?.url) {
-        setUploadedImageUrl(result.data.url)
-        setCurrentStep('form')
-      } else {
-        throw new Error(result.message || 'Image upload failed.')
+      const result = await uploadService.uploadMultipleImages(validFiles)
+      if (result.success && result.urls.length > 0) {
+        setImages((prev) => [...prev, ...result.urls])
       }
     } catch (err) {
-      console.warn('Upload API failed, falling back to local preview:', err)
-      // Allow fallback to image preview so the user can continue even if MinIO bucket is unreachable
-      setUploadedImageUrl(imagePreview || '/guns/pistol.svg')
-      setCurrentStep('form')
+      console.warn('Upload API failed, falling back to local object URLs:', err)
+      const fallbackUrls = validFiles.map((f) => URL.createObjectURL(f))
+      setImages((prev) => [...prev, ...fallbackUrls])
     } finally {
       setUploading(false)
+      // reset file input
+      e.target.value = ''
     }
+  }
+
+  // Add stock preset
+  const handleAddPreset = (url) => {
+    setImages((prev) => [...prev, url])
+    setError('')
+  }
+
+  // Add custom URL
+  const handleAddCustomUrl = (e) => {
+    e.preventDefault()
+    if (!customUrlInput.trim()) return
+    setImages((prev) => [...prev, customUrlInput.trim()])
+    setCustomUrlInput('')
+  }
+
+  // Remove single image
+  const handleRemoveImage = (index) => {
+    setImages((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  // Set as primary image
+  const handleSetPrimary = (index) => {
+    if (index === 0) return
+    setImages((prev) => {
+      const copy = [...prev]
+      const [item] = copy.splice(index, 1)
+      copy.unshift(item)
+      return copy
+    })
   }
 
   const handleFormChange = (e) => {
@@ -256,14 +266,17 @@ export default function CreateGunPage({ onBack, onSuccess }) {
       return
     }
 
+    const activeImages = images.length > 0 ? images : ['/guns/pistol.svg']
+
     // Prepare payload compliant with backend /api/v1/recipes schema
     const payload = {
       name: formData.name.trim(),
       category: formData.category || 'makanan',
       description: formData.description.trim() || `${formData.type} caliber ${formData.caliber}.`,
-      image_url: uploadedImageUrl || '/guns/pistol.svg',
+      image_url: activeImages[0],
+      images: activeImages,
       prep_time: 15,
-      cook_time: Number(formData.price) || 500, // Price stored in cook_time
+      cook_time: Number(formData.price) || 500,
       servings: Number(formData.servings) || 1,
       difficulty: formData.difficulty || 'mudah',
       is_featured: Boolean(formData.is_featured),
@@ -315,8 +328,7 @@ export default function CreateGunPage({ onBack, onSuccess }) {
       <div className="form-title-group">
         <h1 className="display">Register New Hardware</h1>
         <p className="lede">
-          Add a firearm or accessory to the catalog. Data will be synchronized with the
-          university RESTful backend.
+          Add a firearm or accessory to the catalog. Multiple imagery and offline drafts are supported.
         </p>
       </div>
 
@@ -328,117 +340,151 @@ export default function CreateGunPage({ onBack, onSuccess }) {
       )}
       {successMsg && (
         <div className="toast toast--success">
-          <CheckCircle size={18} /> {successMsg}
+          <Check size={18} /> {successMsg}
         </div>
       )}
 
-      {/* Step Indicators */}
-      <div className="form-steps-nav">
-        <div className={`step-badge ${currentStep === 'upload' ? 'step-badge--active' : 'step-badge--done'}`}>
-          1. Imagery
-        </div>
-        <div className="step-badge-connector" />
-        <div className={`step-badge ${currentStep === 'form' ? 'step-badge--active' : ''}`}>
-          2. Specifications &amp; Details
-        </div>
-      </div>
-
-      {/* STEP 1: Upload Image */}
+      {/* STEP 1: Image Upload (Multiple Images Supported) */}
       {currentStep === 'upload' && (
         <div className="card-box">
-          <h2 className="card-box-title">Weapon Imagery</h2>
+          <h2 className="card-box-title">Step 1 — Assign Catalog Imagery</h2>
           <p className="card-box-desc">
-            Upload an authentic photograph or blueprint (max 5MB), or select an armory preset.
+            Upload one or more authentic photographs (max 5MB each), add stock presets, or input direct image URLs.
           </p>
 
-          {!imagePreview ? (
-            <div className="upload-dropzone">
-              <input
-                id="gun-image-input"
-                type="file"
-                accept="image/jpeg,image/jpg,image/png,image/webp"
-                onChange={handleImageChange}
-                className="hidden-file-input"
-              />
-              <label htmlFor="gun-image-input" className="upload-label">
-                <Upload size={36} className="upload-icon" />
-                <span className="upload-main-text">Click to choose an image file</span>
-                <span className="upload-sub-text">JPG, PNG, or WebP up to 5MB</span>
-              </label>
+          <div className="upload-dropzone">
+            <input
+              id="gun-image-input-multi"
+              type="file"
+              multiple
+              accept="image/jpeg,image/jpg,image/png,image/webp"
+              onChange={handleImagesUpload}
+              className="hidden-file-input"
+            />
+            <label htmlFor="gun-image-input-multi" className="upload-label">
+              {uploading ? (
+                <>
+                  <Loader size={36} className="upload-icon spin" />
+                  <span className="upload-main-text">Uploading images…</span>
+                </>
+              ) : (
+                <>
+                  <Upload size={36} className="upload-icon" />
+                  <span className="upload-main-text">Click to choose image file(s)</span>
+                  <span className="upload-sub-text">You can select multiple JPG, PNG, or WebP files</span>
+                </>
+              )}
+            </label>
 
-              <div className="preset-selector">
-                <span className="preset-title">Or use a stock preset:</span>
-                <div className="preset-pills">
-                  <button
-                    type="button"
-                    className="pill"
-                    onClick={() => handleSelectPreset('/guns/pistol.svg')}
-                  >
-                    Pistol Vector
-                  </button>
-                  <button
-                    type="button"
-                    className="pill"
-                    onClick={() => handleSelectPreset('/guns/rifle.svg')}
-                  >
-                    Rifle Vector
-                  </button>
-                  <button
-                    type="button"
-                    className="pill"
-                    onClick={() => handleSelectPreset('/guns/shotgun.svg')}
-                  >
-                    Shotgun Vector
-                  </button>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="preview-container">
-              <div className="preview-image-wrap">
-                <img src={imagePreview} alt="Hardware preview" className="preview-img" />
+            <div className="preset-selector">
+              <span className="preset-title">Or add a stock preset:</span>
+              <div className="preset-pills">
                 <button
                   type="button"
-                  className="preview-remove-btn"
-                  onClick={() => {
-                    setImageFile(null)
-                    setImagePreview(null)
-                    setUploadedImageUrl('')
-                  }}
-                  title="Remove image"
+                  className="pill"
+                  onClick={() => handleAddPreset('/guns/pistol.svg')}
                 >
-                  <X size={18} />
+                  + Pistol Vector
+                </button>
+                <button
+                  type="button"
+                  className="pill"
+                  onClick={() => handleAddPreset('/guns/rifle.svg')}
+                >
+                  + Rifle Vector
+                </button>
+                <button
+                  type="button"
+                  className="pill"
+                  onClick={() => handleAddPreset('/guns/shotgun.svg')}
+                >
+                  + Shotgun Vector
                 </button>
               </div>
+            </div>
 
-              <div className="preview-actions">
+            {/* URL input */}
+            <form onSubmit={handleAddCustomUrl} style={{ display: 'flex', gap: '8px', marginTop: '12px', width: '100%', maxWidth: '440px' }}>
+              <input
+                type="url"
+                placeholder="https://example.com/gun.jpg"
+                value={customUrlInput}
+                onChange={(e) => setCustomUrlInput(e.target.value)}
+                className="form-input"
+                style={{ fontSize: '0.85rem' }}
+              />
+              <button type="submit" className="btn btn--outline btn--sm" style={{ whiteSpace: 'nowrap' }}>
+                + Add URL
+              </button>
+            </form>
+          </div>
+
+          {/* Uploaded images gallery list */}
+          {images.length > 0 && (
+            <div className="multi-image-manager" style={{ marginTop: '24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                <h3 style={{ fontSize: '1rem', fontWeight: 600 }}>
+                  Assigned Images ({images.length})
+                </h3>
+                <span style={{ fontSize: '0.8rem', color: 'var(--brass)' }}>
+                  ★ First image is the primary cover
+                </span>
+              </div>
+
+              <div className="multi-image-grid">
+                {images.map((imgUrl, idx) => (
+                  <div key={idx} className={`multi-image-card ${idx === 0 ? 'is-primary' : ''}`}>
+                    <img src={imgUrl} alt={`Gun view ${idx + 1}`} />
+                    <div className="multi-image-overlay">
+                      {idx === 0 ? (
+                        <span className="primary-pill">Primary</span>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn-overlay-action"
+                          onClick={() => handleSetPrimary(idx)}
+                          title="Set as primary cover"
+                        >
+                          Make Cover
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="btn-overlay-delete"
+                        onClick={() => handleRemoveImage(idx)}
+                        title="Remove image"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="preview-actions" style={{ marginTop: '20px' }}>
                 <button
                   type="button"
                   className="btn btn--primary"
-                  onClick={handleUploadImage}
-                  disabled={uploading}
+                  onClick={() => setCurrentStep('form')}
                 >
-                  {uploading ? (
-                    <>
-                      <Loader size={18} className="spin" /> Uploading to MinIO…
-                    </>
-                  ) : (
-                    <>
-                      <Upload size={18} /> Confirm Imagery &amp; Continue
-                    </>
-                  )}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn--outline"
-                  onClick={() => {
-                    setUploadedImageUrl(imagePreview)
-                    setCurrentStep('form')
-                  }}
-                >
-                  Continue without uploading
+                  <Check size={18} /> Confirm Imagery &amp; Continue to Details
                 </button>
               </div>
+            </div>
+          )}
+
+          {images.length === 0 && (
+            <div style={{ textAlign: 'center', marginTop: '16px' }}>
+              <button
+                type="button"
+                className="btn btn--outline btn--sm"
+                onClick={() => {
+                  setImages(['/guns/pistol.svg'])
+                  setCurrentStep('form')
+                }}
+              >
+                Skip and use default vector
+              </button>
             </div>
           )}
         </div>
@@ -447,19 +493,29 @@ export default function CreateGunPage({ onBack, onSuccess }) {
       {/* STEP 2: Product Form */}
       {currentStep === 'form' && (
         <form onSubmit={handleSubmit} className="entry-form">
-          {/* Active Image Thumbnail */}
+          {/* Active Image Thumbnail Bar */}
           <div className="selected-thumb-bar">
-            <img src={uploadedImageUrl || imagePreview} alt="Selected" className="thumb-small" />
-            <div className="thumb-info">
-              <span className="thumb-title">Imagery Assigned</span>
-              <span className="thumb-sub">Ready for registration</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <img
+                src={images[0] || '/guns/pistol.svg'}
+                alt="Selected cover"
+                className="thumb-small"
+              />
+              <div className="thumb-info">
+                <span className="thumb-title">
+                  {images.length} Image{images.length !== 1 ? 's' : ''} Assigned
+                </span>
+                <span className="thumb-sub">
+                  Primary cover ready for registration
+                </span>
+              </div>
             </div>
             <button
               type="button"
               className="btn btn--outline btn--sm"
               onClick={() => setCurrentStep('upload')}
             >
-              Change Image
+              <ImageIcon size={14} /> Manage Images
             </button>
           </div>
 
@@ -491,7 +547,6 @@ export default function CreateGunPage({ onBack, onSuccess }) {
                 value={formData.type}
                 onChange={(e) => {
                   handleFormChange(e)
-                  // Map category for backend schema
                   setFormData((prev) => ({
                     ...prev,
                     category: e.target.value === 'Pistol' ? 'makanan' : 'minuman',

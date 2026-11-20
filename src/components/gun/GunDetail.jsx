@@ -1,21 +1,62 @@
-import { useState } from 'react'
-import { ArrowLeft, Star, Send, Loader, Share2, Check } from 'lucide-react'
+import { useState, useMemo } from 'react'
+import {
+  ArrowLeft,
+  Star,
+  Send,
+  Loader,
+  Share2,
+  Check,
+  Archive,
+  ChevronLeft,
+  ChevronRight,
+  ThumbsUp,
+  ThumbsDown,
+  Edit2,
+  Trash2,
+  X,
+  Save,
+} from 'lucide-react'
 import FavoriteButton from '../common/FavoriteButton'
-import { useReviews, useCreateReview } from '../../hooks/useReviews'
+import {
+  useReviews,
+  useCreateReview,
+  useUpdateReview,
+  useDeleteReview,
+} from '../../hooks/useReviews'
 import { getUserIdentifier } from '../../services/userService'
 import { formatPrice, averageRating } from '../../utils/helpers'
+import {
+  getReviewReactions,
+  toggleReaction,
+} from '../../utils/reviewReactions'
 
 /**
- * Full-screen product detail view.
- *
- * @param {Object}   props
- * @param {Object}   props.gun       — product data
- * @param {Function} props.onBack    — return to catalog
- * @param {Function} [props.onEdit]  — navigate to edit page
- * @param {Function} [props.onDelete]— trigger delete flow
+ * Full-screen product detail view with multi-image gallery,
+ * archive action, and comprehensive review controls (edit/delete own, like/dislike others).
  */
-export default function GunDetail({ gun, onBack, onEdit, onDelete }) {
-  const imgSrc = gun.image_url || gun.image || '/guns/pistol.svg'
+export default function GunDetail({ gun, onBack, onEdit, onDelete, onArchive }) {
+  const currentUserId = getUserIdentifier()
+
+  // Multi-image gallery state
+  const images = useMemo(() => {
+    if (Array.isArray(gun.images) && gun.images.length > 0) {
+      return gun.images
+    }
+    const fallback = gun.image_url || gun.image || '/guns/pistol.svg'
+    return [fallback]
+  }, [gun])
+
+  const [activeImageIndex, setActiveImageIndex] = useState(0)
+  const currentDisplayImage = images[activeImageIndex] || images[0]
+
+  const handlePrevImage = () => {
+    setActiveImageIndex((prev) => (prev > 0 ? prev - 1 : images.length - 1))
+  }
+
+  const handleNextImage = () => {
+    setActiveImageIndex((prev) => (prev < images.length - 1 ? prev + 1 : 0))
+  }
+
   const category = gun.type || gun.category || '—'
   const caliber = gun.caliber || gun.difficulty || ''
   const price = gun.price ?? gun.cook_time ?? 0
@@ -23,10 +64,23 @@ export default function GunDetail({ gun, onBack, onEdit, onDelete }) {
   // Reviews
   const { reviews, loading: reviewsLoading, refetch: refetchReviews } = useReviews(gun.id)
   const { createReview, loading: submitting } = useCreateReview()
+  const { updateReview, loading: updatingReview } = useUpdateReview()
+  const { deleteReview, loading: deletingReview } = useDeleteReview()
+
+  // New review form
   const [rating, setRating] = useState(5)
   const [comment, setComment] = useState('')
   const [reviewError, setReviewError] = useState('')
   const [reviewSuccess, setReviewSuccess] = useState('')
+
+  // Edit review state (for user's own review)
+  const [editingReviewId, setEditingReviewId] = useState(null)
+  const [editRating, setEditRating] = useState(5)
+  const [editComment, setEditComment] = useState('')
+  const [editError, setEditError] = useState('')
+
+  // Reactions revision trigger for live UI update
+  const [reactionRevision, setReactionRevision] = useState(0)
 
   const avgRating = gun.average_rating || averageRating(reviews)
   const reviewCount = gun.review_count ?? reviews.length
@@ -77,7 +131,8 @@ export default function GunDetail({ gun, onBack, onEdit, onDelete }) {
     }
 
     const result = await createReview(gun.id, {
-      user_identifier: getUserIdentifier(),
+      user_identifier: currentUserId,
+      user_id: currentUserId,
       rating,
       comment: comment.trim(),
     })
@@ -92,6 +147,47 @@ export default function GunDetail({ gun, onBack, onEdit, onDelete }) {
     }
   }
 
+  const handleStartEditReview = (rev) => {
+    setEditingReviewId(rev.id)
+    setEditRating(rev.rating || 5)
+    setEditComment(rev.comment || '')
+    setEditError('')
+  }
+
+  const handleCancelEditReview = () => {
+    setEditingReviewId(null)
+    setEditError('')
+  }
+
+  const handleSaveEditReview = async (reviewId) => {
+    setEditError('')
+    const updated = await updateReview(reviewId, {
+      rating: editRating,
+      comment: editComment.trim(),
+    })
+    if (updated) {
+      setEditingReviewId(null)
+      refetchReviews()
+    } else {
+      setEditError('Failed to update review.')
+    }
+  }
+
+  const handleDeleteReview = async (reviewId) => {
+    if (!window.confirm('Are you sure you want to delete your review?')) return
+    const success = await deleteReview(reviewId)
+    if (success) {
+      refetchReviews()
+    } else {
+      alert('Failed to delete review.')
+    }
+  }
+
+  const handleToggleReaction = (reviewId, type) => {
+    toggleReaction(reviewId, type)
+    setReactionRevision((r) => r + 1)
+  }
+
   return (
     <div className="detail">
       {/* Back button */}
@@ -99,9 +195,59 @@ export default function GunDetail({ gun, onBack, onEdit, onDelete }) {
         <ArrowLeft size={18} /> Back to Catalog
       </button>
 
-      {/* Hero */}
+      {/* Hero with Multi-image gallery */}
       <div className="detail-hero">
-        <img className="detail-img" src={imgSrc} alt={gun.name} />
+        <div className="detail-gallery">
+          <div className="detail-img-wrap" style={{ position: 'relative' }}>
+            <img
+              className="detail-img"
+              src={currentDisplayImage}
+              alt={`${gun.name} view ${activeImageIndex + 1}`}
+            />
+
+            {images.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  className="gallery-arrow gallery-arrow--prev"
+                  onClick={handlePrevImage}
+                  aria-label="Previous image"
+                >
+                  <ChevronLeft size={20} />
+                </button>
+                <button
+                  type="button"
+                  className="gallery-arrow gallery-arrow--next"
+                  onClick={handleNextImage}
+                  aria-label="Next image"
+                >
+                  <ChevronRight size={20} />
+                </button>
+                <span className="gallery-counter">
+                  {activeImageIndex + 1} / {images.length}
+                </span>
+              </>
+            )}
+          </div>
+
+          {/* Thumbnails row if multiple images */}
+          {images.length > 1 && (
+            <div className="gallery-thumbnails">
+              {images.map((imgUrl, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  className={`gallery-thumb-btn ${idx === activeImageIndex ? 'active' : ''}`}
+                  onClick={() => setActiveImageIndex(idx)}
+                  aria-label={`Select photo ${idx + 1}`}
+                >
+                  <img src={imgUrl} alt={`Thumbnail ${idx + 1}`} />
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div className="detail-info">
           <h1 className="display">{gun.name}</h1>
           <p className="type">
@@ -119,6 +265,7 @@ export default function GunDetail({ gun, onBack, onEdit, onDelete }) {
 
           <div className="detail-actions">
             <FavoriteButton gunId={gun.id || gun.name} />
+
             <button
               type="button"
               className={`btn btn--outline ${copied ? 'btn--success' : ''}`}
@@ -128,13 +275,34 @@ export default function GunDetail({ gun, onBack, onEdit, onDelete }) {
               {copied ? <Check size={16} /> : <Share2 size={16} />}
               {copied ? 'Link Copied!' : 'Share'}
             </button>
+
+            {onArchive && (
+              <button
+                type="button"
+                className="btn btn--outline"
+                onClick={() => onArchive(gun)}
+                title="Archive this hardware record"
+              >
+                <Archive size={16} /> Archive
+              </button>
+            )}
+
             {onEdit && (
-              <button type="button" className="btn btn--outline" onClick={() => onEdit(gun)}>
+              <button
+                type="button"
+                className="btn btn--outline"
+                onClick={() => onEdit(gun)}
+              >
                 Edit
               </button>
             )}
+
             {onDelete && (
-              <button type="button" className="btn btn--danger" onClick={() => onDelete(gun)}>
+              <button
+                type="button"
+                className="btn btn--danger"
+                onClick={() => onDelete(gun)}
+              >
                 Delete
               </button>
             )}
@@ -148,7 +316,7 @@ export default function GunDetail({ gun, onBack, onEdit, onDelete }) {
         <p>{gun.description || 'No description available.'}</p>
       </section>
 
-      {/* Specifications (from ingredients / steps if present) */}
+      {/* Specifications */}
       {gun.ingredients && gun.ingredients.length > 0 && (
         <section className="detail-section">
           <h2>Specifications</h2>
@@ -162,6 +330,7 @@ export default function GunDetail({ gun, onBack, onEdit, onDelete }) {
         </section>
       )}
 
+      {/* Assembly / Maintenance Steps */}
       {gun.steps && gun.steps.length > 0 && (
         <section className="detail-section">
           <h2>Assembly / Maintenance Steps</h2>
@@ -177,7 +346,7 @@ export default function GunDetail({ gun, onBack, onEdit, onDelete }) {
 
       {/* Reviews Section */}
       <section className="detail-section">
-        <h2>Reviews</h2>
+        <h2>Operator Reviews &amp; Feedback</h2>
 
         {/* Submit review */}
         <form className="review-form" onSubmit={handleSubmitReview}>
@@ -202,7 +371,7 @@ export default function GunDetail({ gun, onBack, onEdit, onDelete }) {
           <textarea
             className="review-input"
             rows="3"
-            placeholder="Write a short review (optional)…"
+            placeholder="Write a field review or maintenance note…"
             value={comment}
             onChange={(e) => setComment(e.target.value)}
             maxLength={500}
@@ -229,32 +398,159 @@ export default function GunDetail({ gun, onBack, onEdit, onDelete }) {
           )}
         </form>
 
-        {/* Existing reviews */}
+        {/* Existing reviews list */}
         {reviewsLoading ? (
-          <p className="detail-loading">Loading reviews…</p>
+          <p className="detail-loading">Loading operator reviews…</p>
         ) : reviews.length > 0 ? (
           <ul className="review-list">
-            {reviews.map((rev) => (
-              <li key={rev.id} className="review-item">
-                <div className="review-head">
-                  <span className="review-user">{rev.user_identifier || 'Anonymous'}</span>
-                  <span className="review-stars-display">
-                    {Array.from({ length: 5 }, (_, i) => (
-                      <Star
-                        key={i}
-                        size={14}
-                        fill={i < rev.rating ? 'var(--brass)' : 'none'}
-                        stroke={i < rev.rating ? 'var(--brass)' : 'var(--line)'}
+            {reviews.map((rev) => {
+              // Check if user owns this review
+              const isOwnReview =
+                (rev.user_id && rev.user_id === currentUserId) ||
+                (rev.user_identifier &&
+                  (rev.user_identifier === currentUserId ||
+                    rev.user_identifier === `Operator ${String(currentUserId).substring(0, 8)}`))
+
+              const isEditingThis = editingReviewId === rev.id
+
+              // Reaction data for other reviews
+              // reactionRevision triggers re-read of reactions
+              void reactionRevision
+              const reactionData = getReviewReactions(rev.id)
+
+              return (
+                <li key={rev.id} className={`review-item ${isOwnReview ? 'review-item--own' : ''}`}>
+                  <div className="review-head">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span className="review-user">
+                        {rev.user_identifier || 'Anonymous'}
+                      </span>
+                      {isOwnReview && (
+                        <span className="review-badge-own">Your Review</span>
+                      )}
+                    </div>
+
+                    {!isEditingThis && (
+                      <span className="review-stars-display">
+                        {Array.from({ length: 5 }, (_, i) => (
+                          <Star
+                            key={i}
+                            size={14}
+                            fill={i < rev.rating ? 'var(--brass)' : 'none'}
+                            stroke={i < rev.rating ? 'var(--brass)' : 'var(--line)'}
+                          />
+                        ))}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Inline edit form for own review */}
+                  {isEditingThis ? (
+                    <div className="review-edit-box">
+                      <div className="review-stars" style={{ marginBottom: '8px' }}>
+                        {[1, 2, 3, 4, 5].map((n) => (
+                          <button
+                            key={n}
+                            type="button"
+                            className="star-btn"
+                            onClick={() => setEditRating(n)}
+                          >
+                            <Star
+                              size={18}
+                              fill={n <= editRating ? 'var(--brass)' : 'none'}
+                              stroke={n <= editRating ? 'var(--brass)' : 'var(--steel)'}
+                            />
+                          </button>
+                        ))}
+                      </div>
+                      <textarea
+                        className="review-input"
+                        rows="2"
+                        value={editComment}
+                        onChange={(e) => setEditComment(e.target.value)}
+                        placeholder="Edit your review..."
                       />
-                    ))}
-                  </span>
-                </div>
-                {rev.comment && <p className="review-comment">{rev.comment}</p>}
-              </li>
-            ))}
+                      {editError && <p className="form-error">{editError}</p>}
+                      <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                        <button
+                          type="button"
+                          className="btn btn--primary btn--sm"
+                          disabled={updatingReview}
+                          onClick={() => handleSaveEditReview(rev.id)}
+                        >
+                          <Save size={14} /> Save
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn--outline btn--sm"
+                          onClick={handleCancelEditReview}
+                        >
+                          <X size={14} /> Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {rev.comment && <p className="review-comment">{rev.comment}</p>}
+
+                      {/* Footer actions: Edit/Delete for own, Like/Dislike for others */}
+                      <div className="review-footer-actions">
+                        {isOwnReview ? (
+                          <div className="review-owner-tools">
+                            <button
+                              type="button"
+                              className="review-act-btn"
+                              onClick={() => handleStartEditReview(rev)}
+                              title="Edit your review"
+                            >
+                              <Edit2 size={13} /> Edit
+                            </button>
+                            <button
+                              type="button"
+                              className="review-act-btn review-act-btn--danger"
+                              disabled={deletingReview}
+                              onClick={() => handleDeleteReview(rev.id)}
+                              title="Delete your review"
+                            >
+                              <Trash2 size={13} /> Delete
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="review-reaction-group">
+                            <button
+                              type="button"
+                              className={`review-vote-btn ${
+                                reactionData.userReaction === 'like' ? 'review-vote-btn--active-like' : ''
+                              }`}
+                              onClick={() => handleToggleReaction(rev.id, 'like')}
+                              title="Helpful review (Thumbs Up)"
+                            >
+                              <ThumbsUp size={13} />
+                              <span>{reactionData.likes}</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              className={`review-vote-btn ${
+                                reactionData.userReaction === 'dislike' ? 'review-vote-btn--active-dislike' : ''
+                              }`}
+                              onClick={() => handleToggleReaction(rev.id, 'dislike')}
+                              title="Unhelpful review (Thumbs Down)"
+                            >
+                              <ThumbsDown size={13} />
+                              <span>{reactionData.dislikes}</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </li>
+              )
+            })}
           </ul>
         ) : (
-          <p className="detail-empty">No reviews yet. Be the first!</p>
+          <p className="detail-empty">No reviews yet. Be the first to evaluate this piece.</p>
         )}
       </section>
     </div>
