@@ -15,7 +15,7 @@ function Header({ tab, onTab, onNavigateCreate }) {
     <header className="header">
       <div className="header-brand-wrap" onClick={() => onTab('Catalog')} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px' }}>
         <div className="header-logo-badge">
-          <img src="/logo.png" alt="Bore & Barrel" />
+          <img src="/guns/icon.svg" alt="Bore & Barrel" />
         </div>
         <span className="brand display">Bore &amp; Barrel</span>
       </div>
